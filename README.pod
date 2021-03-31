@@ -1,0 +1,30 @@
+=head1 NAME
+
+mFmt.c - simple fmt-style io for C
+
+=head1 SYNOPSIS
+
+ ssize_t i = 0;
+ mfmt_t mfmt = mfmt_parse("foo {bar} baz");
+ for(mfmt_token *t = mfmt_nex(mfmt, &i); t; mfmt_next(mfmt, &i)) {
+    if(strccmp(t->name, "bar")) {
+        puts("bar");
+    }
+ }
+
+ union mfmt_val {
+    char *s;
+    intmax_t i;
+    uintmax_t u;
+    double f;
+ };
+
+ mfmt_fmt("foo {bar} {} baz", MFMT_VAL("bar", 36), MFMT_VAL(42));
+
+=head1 DESCRIPTION
+
+Features:
+
+* callback and iterator based argument handling
+* token-specific callback/context
+* helpers for python-esque interface
