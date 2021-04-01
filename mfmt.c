@@ -15,6 +15,20 @@ char *_mfmt_find_unescaped_char(char *haystack, char needle) {
     return haystack;
 }
 
+void _mfmt_brace_dedup(char *str) {
+    char *c = str, *end = str + strlen(str);
+    while((c = strchr(c, '{'))) {
+        memmove(c, c + 1, end - c);
+        c++;
+    }
+
+    c = str;
+    while((c = strchr(c, '}'))) {
+        memmove(c, c + 1, end - c);
+        c++;
+    }
+}
+
 mfmt_t *mfmt_parse(const char *tmpl, mfmt_callback_t *cb, void *ctx) {
     mfmt_t *mfmt;
     char *c;
@@ -59,6 +73,7 @@ mfmt_t *mfmt_parse(const char *tmpl, mfmt_callback_t *cb, void *ctx) {
             mfmt_token_literal_t *t = &mfmt->tokens[i].literal;
             t->type = MFMT_TOKEN_LITERAL;
             t->string = strndup(c, end - c);
+            _mfmt_brace_dedup(t->string);
             c = end;
         }
     }
@@ -105,4 +120,61 @@ size_t mfmt_printb(mfmt_t *mfmt, void *args, char *buf, size_t buflen) {
 
 size_t mfmt_prints(mfmt_t *mfmt, void *args, char **buf, size_t *buflen) {
     return _mfmt_printf_close(mfmt, args, open_memstream(buf, buflen));
+}
+
+size_t mfmt_fmt(const char *tmpl, mfmt_val_t *args, FILE *f) {
+    mfmt_t *mfmt = mfmt_parse(tmpl, NULL, NULL);
+    size_t len;
+    for(size_t i = 0; i < mfmt->token_count; i++) {
+        mfmt_token_t *t = &mfmt->tokens[i];
+        switch(t->base.type) {
+            case MFMT_TOKEN_LITERAL:
+                len += fputs(t->literal.string, f);
+                break;
+            case MFMT_TOKEN_CALLBACK:
+                /* fprintf(stderr, "token: %s\n", t->callback.name); */
+                if(t->callback.name[0]) {
+                    for(mfmt_val_t *v = args; v; v++) {
+                        /* fprintf(stderr, "val: %s\n", v->name); */
+                        if(strcmp(v->name, t->callback.name) == 0) {
+                            len += fputs(v->string, f);
+                            break;
+                        }
+                    }
+                } else {
+                    len += fputs(args->string, f);
+                    args++;
+                }
+                break;
+        }
+    }
+    return len;
+}
+
+size_t mfmt_mfmt(mfmt_t *mfmt, mfmt_val_t *args, FILE *f) {
+    size_t len;
+    for(size_t i = 0; i < mfmt->token_count; i++) {
+        mfmt_token_t *t = &mfmt->tokens[i];
+        switch(t->base.type) {
+            case MFMT_TOKEN_LITERAL:
+                len += fputs(t->literal.string, f);
+                break;
+            case MFMT_TOKEN_CALLBACK:
+                /* fprintf(stderr, "token: %s\n", t->callback.name); */
+                if(t->callback.name[0]) {
+                    for(mfmt_val_t *v = args; v; v++) {
+                        /* fprintf(stderr, "val: %s\n", v->name); */
+                        if(strcmp(v->name, t->callback.name) == 0) {
+                            len += fputs(v->string, f);
+                            break;
+                        }
+                    }
+                } else {
+                    len += fputs(args->string, f);
+                    args++;
+                }
+                break;
+        }
+    }
+    return len;
 }

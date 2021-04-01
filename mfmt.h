@@ -9,7 +9,7 @@ typedef enum mfmt_token_type_t {
 
 typedef struct mfmt_token_literal_t {
     mfmt_token_type_t type;
-    const char *string;
+    char *string;
 } mfmt_token_literal_t;
 
 typedef struct mfmt_token_base_t {
@@ -26,8 +26,7 @@ typedef struct mfmt_token_callback_t {
     char align;
     char fill;
     char conversion;
-    const char *string;
-    int sign:1;
+    int sign;
 } mfmt_token_callback_t;
 
 typedef union mfmt_token_t {
@@ -44,6 +43,11 @@ typedef struct mfmt_t {
     size_t token_count;
     mfmt_token_t *tokens;
 } mfmt_t;
+
+typedef struct mfmt_val_t {
+    const char *name;
+    const char *string;
+} mfmt_val_t;
 
 mfmt_t *mfmt_parse(const char *tmpl, mfmt_callback_t *cb, void *ctx);
 size_t mfmt_printf(mfmt_t *mfmt, void *args, FILE *f);

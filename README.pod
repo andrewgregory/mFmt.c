@@ -1,6 +1,6 @@
 =head1 NAME
 
-mFmt.c - simple fmt-style io for C
+mFmt.c - simple python-style string formatting for C
 
 =head1 SYNOPSIS
 
