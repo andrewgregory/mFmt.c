@@ -1,25 +1,66 @@
+#define _GNU_SOURCE
+
 #include <errno.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include <mfmt.h>
 
-mfmt_t mfmt_parse(const char *tmpl, mfmt_callback_t *cb, void *ctx) {
-    mfmt_t *mfmt = calloc(sizeof(mft_t), 1);
-    if(mfmt == NULL) { return NULL; }
+char *_mfmt_find_unescaped_char(char *haystack, char needle) {
+    while(1) {
+        haystack = strchrnul(haystack, needle);
+        if(*haystack && *(haystack + 1) == needle) { haystack += 2; continue; }
+        else { break; }
+    }
+    return haystack;
+}
+
+mfmt_t *mfmt_parse(const char *tmpl, mfmt_callback_t *cb, void *ctx) {
+    mfmt_t *mfmt;
     char *c;
-    for(c = tmpl; *c; c++) {
+
+    mfmt = calloc(sizeof(mfmt_t), 1);
+    if(mfmt == NULL) { return NULL; }
+
+    for(c = (char*) tmpl; c && *c; ) {
         mfmt->token_count++;
         if(*c == '{' && *(c + 1) != '{') {
             /* replacement */
+            if(!*(c = _mfmt_find_unescaped_char(c + 1, '}'))) {
+                errno = EINVAL;
+                free(mfmt);
+                return NULL;
+            } else {
+                c++;
+            }
         } else {
             /* literal */
-            while(*c) {
-                while(*c && *c != '{') { c++; }
-                if(*c == '{' && *(c + 1) == '{') { c += 2; }
-            }
+            c = _mfmt_find_unescaped_char(c, '{');
         }
     }
 
-    if((mfmt->tokens = calloc(sizeof(mfmt_token_t), mfmt->token_count))) {
+    if((mfmt->tokens = calloc(sizeof(mfmt_token_t), mfmt->token_count)) == NULL) {
+        free(mfmt);
+        return NULL;
+    }
+
+    size_t i;
+    for(c = (char*) tmpl, i = 0; c && *c; i++) {
+        if(*c == '{' && *(c + 1) != '{') {
+            /* replacement */
+            mfmt_token_callback_t *t = &mfmt->tokens[i].callback;
+            char *end = _mfmt_find_unescaped_char(c + 1, '}');
+            t->type = MFMT_TOKEN_CALLBACK;
+            t->name = strndup(c + 1, end - c - 1);
+            c = end + 1;
+        } else {
+            /* literal */
+            char *end = _mfmt_find_unescaped_char(c, '{');
+            mfmt_token_literal_t *t = &mfmt->tokens[i].literal;
+            t->type = MFMT_TOKEN_LITERAL;
+            t->string = strndup(c, end - c);
+            c = end;
+        }
     }
 
     return mfmt;
@@ -29,17 +70,17 @@ size_t mfmt_printf(mfmt_t *mfmt, void *args, FILE *f) {
     size_t len = 0;
     size_t i;
     for(i = 0; i < mfmt->token_count; i++) {
-        mfmt_token_t *t = mfmt->tokens[i];
-        switch(t->type) {
+        mfmt_token_t *t = &mfmt->tokens[i];
+        switch(t->base.type) {
             case MFMT_TOKEN_LITERAL:
-                len += fputs(((mfmt_token_literal)t)->string, f);
+                len += fputs(t->literal.string, f);
                 break;
             case MFMT_TOKEN_CALLBACK:
-                len += mfmt->cb((const mfmt_token_callback_t)t, args, f, mfmt->context);
+                len += mfmt->cb(f, &t->callback, mfmt->ctx, args);
                 break;
             default:
                 errno = EINVAL;
-                return -1;
+                return 0;
         }
     }
     return len;
@@ -62,13 +103,6 @@ size_t mfmt_printb(mfmt_t *mfmt, void *args, char *buf, size_t buflen) {
     return _mfmt_printf_close(mfmt, args, fmemopen(buf, buflen, "w"));
 }
 
-size_t mfmt_prints(mfmt_t *mfmt, void *args, char **buf, size_t buflen) {
-    return _mfmt_printf_close(mfmt, args, open_memstream(buf, buflen, "w"));
-}
-
-size_t mfmt_formatf(const char *tmple, mfmt_callback_t *cb, void ctx, void *args, FILE *f) {
-    mfmt_t mfmt = mfmt_parse(tmple, cb, ctx);
-    size_t len = mfmt_printf(mfmt, args, f);
-    mfmt_free(mfmt);
-    return len;
+size_t mfmt_prints(mfmt_t *mfmt, void *args, char **buf, size_t *buflen) {
+    return _mfmt_printf_close(mfmt, args, open_memstream(buf, buflen));
 }
