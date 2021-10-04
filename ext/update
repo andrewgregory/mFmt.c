@@ -1,0 +1,8 @@
+#!/usr/bin/sh
+
+r="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -d "$r" ] && cd "$r"; then
+else
+  printf "unable to chdir to repository root '%s'\n" "$r"
+  exit 1
+fi
