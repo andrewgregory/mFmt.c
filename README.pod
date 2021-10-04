@@ -1,0 +1,40 @@
+=head1 NAME
+
+mFmt.c - python/rust style string formatting for C
+
+=head1 SYNOPSIS
+
+ 
+
+=head1 DESCRIPTION
+
+In order to work around C's limitations, B<mFmt.c> provides multiple interfaces
+ranging in flexibility and ease-of-use.
+
+
+=head2 Format String Syntax
+
+format_string   = ( text | replacement ) *
+replacement     = '{' [argument] [ '!' conversion] [ ':' format_spec ] '}'
+argument        = [^!{}:]
+conversion      = [^!{}:]
+format_spec     = [[fill]align][sign][#][0][width][grouping_option][.precision][type]
+fill            = character
+align           = "<" | ">" | "=" | "^"
+sign            = "+" | "-" | " "
+width           = count
+grouping_option = "_" | ","
+precision       = count
+count           = argument '$' | integer
+type            = character
+
+
+"{depends[{name:15} | {version:10} | {desc:50}\n]}"
+
+=head1 SEE ALSO
+
+https://doc.rust-lang.org/std/fmt/
+
+https://docs.python.org/3.8/library/string.html#format-string-syntax
+
+https://slbkbs.org/tmp/fmt/fmt.h
