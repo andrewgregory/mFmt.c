@@ -31,7 +31,22 @@
 
 #include "mfmt.h"
 
-char *mfmt_strechrnul(const char *haystack, int needle) {
+/**
+ * Locate a non-escaped delimiting character in a string
+ *
+ * Delimiter characters can be escaped by doubling them.
+ *
+ * @param haystack string to search
+ * @param needle character to search for
+ *
+ * @return pointer to first character matching needle or NUL byte
+ *
+ * @code
+ * char *c = mfmt_find_delim("foo $$ bar $", '$');
+ * //    c points here ------------------^
+ * @endcode
+ */
+char *mfmt_find_delim(const char *haystack, int needle) {
     const char *c;
     for(c = haystack; *c; c++) {
         if(*c == needle) {
@@ -42,19 +57,58 @@ char *mfmt_strechrnul(const char *haystack, int needle) {
     return (char *)c;
 }
 
-void mfmt_dedup_char(char *haystack, char needle) {
-    char *c = haystack, *end = haystack + strlen(haystack);
-    while((c = strchr(c, needle))) {
-        if(*(c + 1) == needle) {
+char *mfmt_find_token_open(const char *haystack, int topen) {
+    char *c = mfmt_find_delim(haystack, topen);
+    return *c ? c : NULL;
+}
+
+/**
+ * Search a string for a paired closing delimiting character.
+ *
+ * @param haystack string to search
+ * @param topen character indicating the beginning of an internal pair
+ * @param tclose character indicating the close of a pair
+ *
+ * @return pointer to first character matching needle or NUL byte
+ *
+ * @code
+ * char *c = mfmt_find_token_close("foo {bar} baz}", '{', '}');
+ * //    c points here --------------------------^
+ * @endcode
+ *
+ * @note
+ * \a haystack should not include the opening character.  An initial opening
+ * character will be treated as an internal pair.
+ */
+char *mfmt_find_token_close(const char *haystack, int topen, int tclose) {
+    const char *c = haystack;
+    size_t depth = 1;
+    while(*c && depth) {
+        if(*c == tclose && *(c + 1) != tclose) {
+            depth--; // token close
+        } else if(*c == topen && *(c + 1) != topen) {
+            depth++; // nested token open
+        } else if(*c == topen || *c == tclose) {
+            c++; // skip escaped character
+        }
+        c++;
+    }
+    return *c ? (char *)c : NULL;
+}
+
+void mfmt_unescape_delim(char *string, int delim) {
+    char *c = string, *end = string + strlen(string);
+    while((c = strchr(c, delim))) {
+        if(*(c + 1) == delim) {
             memmove(c, c + 1, end - c);
         }
         c++;
     }
 }
 
-void mfmt_dedup_braces(char *str) {
-    mfmt_dedup_char(str, mfmt_open);
-    mfmt_dedup_char(str, mfmt_close);
+void mfmt_unescape_braces(char *str) {
+    mfmt_unescape_delim(str, mfmt_open);
+    mfmt_unescape_delim(str, mfmt_close);
 }
 
 mfmt_t *mfmt_new(void) {
@@ -92,7 +146,7 @@ mfmt_t *mfmt_parse_tokens(const char *tmpl) {
                 return NULL;
             }
         } else {
-            c = mfmt_strechrnul(c, mfmt_open);
+            c = mfmt_find_delim(c, mfmt_open);
         }
     }
 
@@ -126,18 +180,18 @@ mfmt_t *mfmt_parse_tokens(const char *tmpl) {
                 free(mfmt);
                 return NULL;
             }
-            mfmt_dedup_braces(t->string);
+            mfmt_unescape_braces(t->string);
             c = end;
         } else {
             /* literal */
-            const char *end = mfmt_strechrnul(c, mfmt_open);
+            const char *end = mfmt_find_delim(c, mfmt_open);
             mfmt_token_literal_t *t = &mfmt->tokens[i].literal;
             t->type = MFMT_TOKEN_LITERAL;
             if((t->string = strndup(c, end - c)) == NULL) {
                 free(mfmt);
                 return NULL;
             }
-            mfmt_dedup_braces(t->string);
+            mfmt_unescape_braces(t->string);
             c = end;
         }
     }
@@ -148,6 +202,48 @@ mfmt_t *mfmt_parse_tokens(const char *tmpl) {
     }
 
     return mfmt;
+}
+
+mfmt_specification_t *mfmt_parse_specification(const char *string) {
+    return NULL;
+}
+
+size_t mfmt_print_char(FILE *f, int c, size_t count) {
+    while(count--) { fputc(c, f); }
+    return count;
+}
+
+size_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string) {
+    size_t len;
+
+    if(spec->set & ~(MFMT_SPEC_FIELD_FILL | MFMT_SPEC_FIELD_ALIGN
+                | MFMT_SPEC_FIELD_ZERO | MFMT_SPEC_FIELD_WIDTH
+                | MFMT_SPEC_FIELD_PRECISION | MFMT_SPEC_FIELD_TYPE)) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    len = strlen(string);
+    if(spec->width < len) {
+        int fill = spec->fill == '\0' ? ' ' : spec->fill;
+        size_t fill_len = spec->width - len;
+        switch(spec->align) {
+            case MFMT_ALIGN_RIGHT: 
+                return mfmt_print_char(f, fill, fill_len) + fputs(string, f);
+                break;
+            case MFMT_ALIGN_CENTER: 
+                return mfmt_print_char(f, fill, fill_len / 2)
+                    + fputs(string, f)
+                    + mfmt_print_char(f, fill, fill_len - fill_len / 2);
+                break;
+            case MFMT_ALIGN_LEFT: 
+            default:
+                return fputs(string, f) + mfmt_print_char(f, fill, fill_len);
+                break;
+        }
+    } else {
+        return fputs(string, f);
+    }
 }
 
 #endif /* MFMT_C */
