@@ -45,18 +45,13 @@ typedef enum mfmt_align_t {
 typedef enum mfmt_sign_t {
     MFMT_SIGN_POSITIVE = '+',
     MFMT_SIGN_NEGATIVE = '-',
+    MFMT_SIGN_SPACE    = ' ',
 } mfmt_sign_t;
 
-typedef struct mfmt_specification_input_t {
-    char fill;
-    char align;
-    char *sign;
-    char *width;
-    char *precision;
-    char *type;
-    int alternate;
-    int zero;
-} mfmt_specification_input_t;
+typedef enum mfmt_grouping_t {
+    MFMT_GROUPING_COMMA      = ',',
+    MFMT_GROUPING_UNDERSCORE = '_',
+} mfmt_grouping_t;
 
 typedef enum mfmt_specification_field_t {
     MFMT_SPEC_FIELD_FILL      = (1<<0),
@@ -65,14 +60,16 @@ typedef enum mfmt_specification_field_t {
     MFMT_SPEC_FIELD_ALTERNATE = (1<<3),
     MFMT_SPEC_FIELD_ZERO      = (1<<4),
     MFMT_SPEC_FIELD_WIDTH     = (1<<5),
-    MFMT_SPEC_FIELD_PRECISION = (1<<6),
-    MFMT_SPEC_FIELD_TYPE      = (1<<7),
+    MFMT_SPEC_FIELD_GROUPING  = (1<<6),
+    MFMT_SPEC_FIELD_PRECISION = (1<<7),
+    MFMT_SPEC_FIELD_TYPE      = (1<<8),
 } mfmt_specification_field_t;
 
 typedef struct mfmt_specification_t {
     char fill;
     mfmt_align_t align;
     mfmt_sign_t sign;
+    mfmt_grouping_t grouping;
     int alternate;
     int zero;
     size_t width;
@@ -82,26 +79,10 @@ typedef struct mfmt_specification_t {
     int set;
 } mfmt_specification_t;
 
-typedef struct mfmt_token_base_t {
-    mfmt_token_type_t type;
-} mfmt_token_base_t;
-
-typedef struct mfmt_token_literal_t {
+typedef struct mfmt_token_t {
     mfmt_token_type_t type;
     char *string;
     void *ctx;
-} mfmt_token_literal_t;
-
-typedef struct mfmt_token_substitution_t {
-    mfmt_token_type_t type;
-    char *string;
-    void *ctx;
-} mfmt_token_substitution_t;
-
-typedef union mfmt_token_t {
-    mfmt_token_base_t base;
-    mfmt_token_literal_t literal;
-    mfmt_token_substitution_t substitution;
 } mfmt_token_t;
 
 typedef struct mfmt_t {

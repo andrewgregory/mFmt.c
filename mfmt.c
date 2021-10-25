@@ -32,7 +32,7 @@
 #include "mfmt.h"
 
 /**
- * Locate a non-escaped delimiting character in a string
+ * Locate a non-escaped delimiting character in a string.
  *
  * Delimiter characters can be escaped by doubling them.
  *
@@ -42,8 +42,10 @@
  * @return pointer to first character matching needle or NUL byte
  *
  * @code
+ *
  * char *c = mfmt_find_delim("foo $$ bar $", '$');
- * //    c points here ------------------^
+ * // c points here ---------------------^
+ *
  * @endcode
  */
 char *mfmt_find_delim(const char *haystack, int needle) {
@@ -72,8 +74,10 @@ char *mfmt_find_token_open(const char *haystack, int topen) {
  * @return pointer to first character matching needle or NUL byte
  *
  * @code
+ *
  * char *c = mfmt_find_token_close("foo {bar} baz}", '{', '}');
- * //    c points here --------------------------^
+ * // c points here -----------------------------^
+ *
  * @endcode
  *
  * @note
@@ -83,9 +87,10 @@ char *mfmt_find_token_open(const char *haystack, int topen) {
 char *mfmt_find_token_close(const char *haystack, int topen, int tclose) {
     const char *c = haystack;
     size_t depth = 1;
-    while(*c && depth) {
+    while(*c) {
         if(*c == tclose && *(c + 1) != tclose) {
             depth--; // token close
+            if(depth == 0) { break; }
         } else if(*c == topen && *(c + 1) != topen) {
             depth++; // nested token open
         } else if(*c == topen || *c == tclose) {
@@ -106,96 +111,73 @@ void mfmt_unescape_delim(char *string, int delim) {
     }
 }
 
-void mfmt_unescape_braces(char *str) {
-    mfmt_unescape_delim(str, mfmt_open);
-    mfmt_unescape_delim(str, mfmt_close);
-}
-
 mfmt_t *mfmt_new(void) {
     return calloc(sizeof(mfmt_t), 1);
 }
 
 void mfmt_free(mfmt_t *mfmt) {
-    free(mfmt);
+    if(mfmt) {
+        free(mfmt->tokens);
+        free(mfmt);
+    }
+}
+
+static int _mfmt_find_token_end(const char *haystack,
+        const int ropen, const int rclose,
+        const char **next, mfmt_token_type_t *type) {
+    char *delim = mfmt_find_delim(haystack, ropen);
+    if(delim != haystack) {
+        /* literal */
+        *next = delim;
+        *type = MFMT_TOKEN_LITERAL;
+        return 0;
+    } else if((*next = mfmt_find_token_close(delim + 1, ropen, rclose))) {
+        /* properly formed replacement */
+        (*next)++; /* move to character after closing delimiter */
+        *type = MFMT_TOKEN_SUBSTITUTION;
+        return 0;
+    } else {
+        /* replacement without closing delimiter */
+        errno = EINVAL;
+        return -1;
+    }
 }
 
 mfmt_t *mfmt_parse_tokens(const char *tmpl) {
     mfmt_t *mfmt;
+    size_t token_count = 0;
 
-    if((mfmt = mfmt_new()) == NULL) { return NULL; }
-
-    for(const char *c = tmpl; c && *c; ) {
-        mfmt->token_count++;
-        if(*c == mfmt_open && *(c + 1) != mfmt_open) {
-            size_t depth = 1;
-            c++;
-            while(c && *c && depth) {
-                if(*c == mfmt_open && *(c + 1) != mfmt_open) {
-                    depth++; // internal brace open
-                } else if(*c == mfmt_close && *(c + 1) != mfmt_close) {
-                    depth--; // brace close
-                } else if(*c == mfmt_open || *c == mfmt_close) {
-                    c++; // skip escaped character
-                }
-                c++;
-            }
-            if(depth) {
-                // unclosed brace
-                free(mfmt);
-                errno = EINVAL;
-                return NULL;
-            }
-        } else {
-            c = mfmt_find_delim(c, mfmt_open);
+    for(const char *c = tmpl, *next; *c; c = next) {
+        mfmt_token_type_t ttype;
+        if(_mfmt_find_token_end(c, mfmt_open, mfmt_close, &next, &ttype) != 0) {
+            return NULL;
         }
+        token_count++;
     }
 
-    if((mfmt->tokens = calloc(sizeof(mfmt_token_t), mfmt->token_count)) == NULL) {
-        free(mfmt);
+    if((mfmt = mfmt_new()) == NULL) { return NULL; }
+    if((mfmt->tokens = calloc(sizeof(mfmt_token_t), token_count)) == NULL) {
+        mfmt_free(mfmt);
         return NULL;
     }
 
-    const char *c;
-    size_t i;
-    for(c = tmpl, i = 0; c && *c; i++) {
-        if(*c == mfmt_open && *(c + 1) != mfmt_open) {
-            /* substitution */
-            mfmt_token_substitution_t *t = &mfmt->tokens[i].substitution;
-            size_t depth = 1;
-            const char *end = ++c;
-            t->type = MFMT_TOKEN_SUBSTITUTION;
-
-            while(end && *end && depth) {
-                if(*end == mfmt_open && *(end + 1) != mfmt_open) {
-                    depth++; // internal brace open
-                } else if(*end == mfmt_close && *(end + 1) != mfmt_close) {
-                    depth--; // brace close
-                } else if(*end == mfmt_open || *end == mfmt_close) {
-                    end++; // skip escaped character
-                }
-                end++;
-            }
-
-            if((t->string = strndup(c, end - c - 1)) == NULL) {
-                free(mfmt);
-                return NULL;
-            }
-            mfmt_unescape_braces(t->string);
-            c = end;
-        } else {
-            /* literal */
-            const char *end = mfmt_find_delim(c, mfmt_open);
-            mfmt_token_literal_t *t = &mfmt->tokens[i].literal;
-            t->type = MFMT_TOKEN_LITERAL;
-            if((t->string = strndup(c, end - c)) == NULL) {
-                free(mfmt);
-                return NULL;
-            }
-            mfmt_unescape_braces(t->string);
-            c = end;
+    for(const char *c = tmpl, *next; *c && mfmt->token_count < token_count; c = next) {
+        mfmt_token_t *t = &mfmt->tokens[mfmt->token_count];
+        if(_mfmt_find_token_end(c, mfmt_open, mfmt_close, &next, &t->type) != 0) {
+            mfmt_free(mfmt);
+            return NULL;
         }
+        t->string =
+            t->type == MFMT_TOKEN_LITERAL ? strndup(c, next - c)
+            :                               strndup(c + 1, next - c - 2);
+
+        mfmt_unescape_delim(t->string, mfmt_open);
+        mfmt_unescape_delim(t->string, mfmt_close);
+        mfmt->token_count++;
     }
-    if(i != mfmt->token_count) {
+
+    /* double check the number of assigned tokens matches initial count */
+    if(token_count != mfmt->token_count) {
         mfmt_free(mfmt);
         errno = EINVAL;
         return NULL;
@@ -204,46 +186,86 @@ mfmt_t *mfmt_parse_tokens(const char *tmpl) {
     return mfmt;
 }
 
+static int _mfmt_parse_count(const char *string, size_t *ret, const char **end) {
+    *end = string;
+    *ret = 0;
+    if(!(**end >= '0' && **end <= '9')) { errno = EINVAL; return -1; }
+    do {
+        size_t new = (*ret * 10) + (**end - '0');
+        if(new < *ret) { errno = EOVERFLOW; return -1; }
+        *ret = new;
+        (*end)++;
+    } while(**end >= '0' && **end <= '9');
+    return 0;
+}
+
 mfmt_specification_t *mfmt_parse_specification(const char *string) {
-    return NULL;
-}
+    const char *c = string;
+    mfmt_specification_t *spec = calloc(sizeof(mfmt_specification_t), 1);
 
-size_t mfmt_print_char(FILE *f, int c, size_t count) {
-    while(count--) { fputc(c, f); }
-    return count;
-}
+    if(!spec) { return NULL; }
 
-size_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string) {
-    size_t len;
-
-    if(spec->set & ~(MFMT_SPEC_FIELD_FILL | MFMT_SPEC_FIELD_ALIGN
-                | MFMT_SPEC_FIELD_ZERO | MFMT_SPEC_FIELD_WIDTH
-                | MFMT_SPEC_FIELD_PRECISION | MFMT_SPEC_FIELD_TYPE)) {
-        errno = EINVAL;
-        return 0;
+    if(c[0] != '\0' && (c[1] == '<' || c[1] == '^' || c[1] == '>')) {
+        spec->set |= MFMT_SPEC_FIELD_FILL;
+        spec->set |= MFMT_SPEC_FIELD_ALIGN;
+        spec->fill = c[0];
+        spec->align = c[1];
+        c += 2;
+    } else if(*c == '<' || *c == '^' || *c == '>') {
+        spec->set |= MFMT_SPEC_FIELD_ALIGN;
+        spec->align = *c;
+        c++;
     }
 
-    len = strlen(string);
-    if(spec->width < len) {
-        int fill = spec->fill == '\0' ? ' ' : spec->fill;
-        size_t fill_len = spec->width - len;
-        switch(spec->align) {
-            case MFMT_ALIGN_RIGHT: 
-                return mfmt_print_char(f, fill, fill_len) + fputs(string, f);
-                break;
-            case MFMT_ALIGN_CENTER: 
-                return mfmt_print_char(f, fill, fill_len / 2)
-                    + fputs(string, f)
-                    + mfmt_print_char(f, fill, fill_len - fill_len / 2);
-                break;
-            case MFMT_ALIGN_LEFT: 
-            default:
-                return fputs(string, f) + mfmt_print_char(f, fill, fill_len);
-                break;
+    if(*c == '+' || *c == '-' || *c == ' ') {
+        spec->set |= MFMT_SPEC_FIELD_SIGN;
+        spec->sign = *c;
+        c++;
+    }
+
+    if(*c == '#') {
+        spec->set |= MFMT_SPEC_FIELD_ALTERNATE;
+        spec->alternate = 1;
+        c++;
+    }
+
+    if(*c == '0') {
+        spec->set |= MFMT_SPEC_FIELD_ZERO;
+        spec->zero = 1;
+        c++;
+    }
+
+    if(*c >= '0' && *c <= '9') {
+        spec->set |= MFMT_SPEC_FIELD_WIDTH;
+        if(_mfmt_parse_count(c, &spec->width, &c) != 0) {
+            free(spec);
+            return NULL;
         }
-    } else {
-        return fputs(string, f);
     }
+
+    if(*c == ',' || *c == '_') {
+        spec->set |= MFMT_SPEC_FIELD_GROUPING;
+        spec->grouping = *c;
+        c++;
+    }
+
+    if(*c == '.') {
+        spec->set |= MFMT_SPEC_FIELD_PRECISION;
+        if(_mfmt_parse_count(c, &spec->precision, &c) != 0) {
+            free(spec);
+            return NULL;
+        }
+    }
+
+    if(*c) {
+        spec->set |= MFMT_SPEC_FIELD_TYPE;
+        if((spec->type = strdup(c)) == NULL) {
+            free(spec);
+            return NULL;
+        }
+    }
+
+    return spec;
 }
 
 #endif /* MFMT_C */

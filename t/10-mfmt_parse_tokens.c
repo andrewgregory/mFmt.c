@@ -17,17 +17,15 @@ void _is_tokens(const char *template) {
     printf("template: '%s'\n", template);
     for(size_t i = 0; i < mfmt->token_count; i++) {
         mfmt_token_t *t = &mfmt->tokens[i];
-        switch(t->base.type) {
+        switch(t->type) {
             case MFMT_TOKEN_LITERAL:
                 {
-                    mfmt_token_literal_t *l = &t->literal;
-                    printf("literal: '%s'\n", l->string);
+                    printf("literal: '%s'\n", t->string);
                     break;
                 }
             case MFMT_TOKEN_SUBSTITUTION:
                 {
-                    mfmt_token_substitution_t *s = &t->substitution;
-                    printf("substitution: '%s'\n", s->string);
+                    printf("substitution: '%s'\n", t->string);
                     break;
                 }
         }
