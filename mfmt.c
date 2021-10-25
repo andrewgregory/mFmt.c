@@ -43,12 +43,12 @@
  *
  * @code
  *
- * char *c = mfmt_find_delim("foo $$ bar $", '$');
- * // c points here ---------------------^
+ * char *c = mfmt_find_delim_nul("foo $$ bar $", '$');
+ * // c points here -------------------------^
  *
  * @endcode
  */
-char *mfmt_find_delim(const char *haystack, int needle) {
+char *mfmt_find_delim_nul(const char *haystack, int needle) {
     const char *c;
     for(c = haystack; *c; c++) {
         if(*c == needle) {
@@ -59,8 +59,23 @@ char *mfmt_find_delim(const char *haystack, int needle) {
     return (char *)c;
 }
 
+/**
+ * Search a string for an opening delimiting character.
+ *
+ * @param haystack string to search
+ * @param topen delimiter to search for
+ *
+ * @return pointer to first delimiter matching needle or NULL
+ *
+ * @code
+ *
+ * char *c = mfmt_find_token_close("{{foo {bar} baz}", '{');
+ * // c points here ----------------------^
+ *
+ * @endcode
+ */
 char *mfmt_find_token_open(const char *haystack, int topen) {
-    char *c = mfmt_find_delim(haystack, topen);
+    char *c = mfmt_find_delim_nul(haystack, topen);
     return *c ? c : NULL;
 }
 
@@ -71,7 +86,7 @@ char *mfmt_find_token_open(const char *haystack, int topen) {
  * @param topen character indicating the beginning of an internal pair
  * @param tclose character indicating the close of a pair
  *
- * @return pointer to first character matching needle or NUL byte
+ * @return pointer to first delimiter matching needle or NULL
  *
  * @code
  *
@@ -81,6 +96,7 @@ char *mfmt_find_token_open(const char *haystack, int topen) {
  * @endcode
  *
  * @note
+ *
  * \a haystack should not include the opening character.  An initial opening
  * character will be treated as an internal pair.
  */
@@ -125,7 +141,7 @@ void mfmt_free(mfmt_t *mfmt) {
 static int _mfmt_find_token_end(const char *haystack,
         const int ropen, const int rclose,
         const char **next, mfmt_token_type_t *type) {
-    char *delim = mfmt_find_delim(haystack, ropen);
+    char *delim = mfmt_find_delim_nul(haystack, ropen);
     if(delim != haystack) {
         /* literal */
         *next = delim;
@@ -206,21 +222,17 @@ mfmt_specification_t *mfmt_parse_specification(const char *string) {
     if(!spec) { return NULL; }
 
     if(c[0] != '\0' && (c[1] == '<' || c[1] == '^' || c[1] == '>')) {
-        spec->set |= MFMT_SPEC_FIELD_FILL;
-        spec->set |= MFMT_SPEC_FIELD_ALIGN;
-        spec->fill = c[0];
-        spec->align = c[1];
-        c += 2;
+        spec->set |= MFMT_SPEC_FIELD_FILL | MFMT_SPEC_FIELD_ALIGN;
+        spec->fill = *(c++);
+        spec->align = *(c++);
     } else if(*c == '<' || *c == '^' || *c == '>') {
         spec->set |= MFMT_SPEC_FIELD_ALIGN;
-        spec->align = *c;
-        c++;
+        spec->align = *(c++);
     }
 
     if(*c == '+' || *c == '-' || *c == ' ') {
         spec->set |= MFMT_SPEC_FIELD_SIGN;
-        spec->sign = *c;
-        c++;
+        spec->sign = *(c++);
     }
 
     if(*c == '#') {
@@ -245,8 +257,7 @@ mfmt_specification_t *mfmt_parse_specification(const char *string) {
 
     if(*c == ',' || *c == '_') {
         spec->set |= MFMT_SPEC_FIELD_GROUPING;
-        spec->grouping = *c;
-        c++;
+        spec->grouping = *(c++);
     }
 
     if(*c == '.') {
