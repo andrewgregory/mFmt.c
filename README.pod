@@ -14,22 +14,18 @@ ranging in flexibility and ease-of-use.
 
 =head2 Format String Syntax
 
-format_string   = ( text | replacement ) *
-replacement     = '{' [argument] [ ':' format_spec ] '}'
-argument        = [^{}:]
-
-format_spec     = [[fill]align][sign][#][0][width][grouping_option][.precision][type]
-fill            = character
-align           = "<" | ">" | "=" | "^"
-sign            = "+" | "-" | " "
-width           = count
-grouping_option = "_" | ","
-precision       = count
-count           = integer
-type            = [a-zA-Z]
-
-
-"{depends[{name:15} | {version:10} | {desc:50}\n]}"
+ format_string   = ( text | replacement ) *
+ replacement     = '{' [argument] [ ':' format_spec ] '}'
+ argument        = [^{}:]
+ format_spec     = [[fill]align][sign][#][0][width][grouping_option][.precision][type]
+ fill            = character
+ align           = "<" | ">" | "=" | "^"
+ sign            = "+" | "-" | " "
+ width           = count
+ grouping_option = "_" | ","
+ precision       = count
+ count           = integer
+ type            = [a-zA-Z]
 
 =head1 COMPATIBILITY
 
