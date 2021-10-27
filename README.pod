@@ -4,13 +4,7 @@ mFmt.c - python/rust style string formatting for C
 
 =head1 SYNOPSIS
 
- 
-
 =head1 DESCRIPTION
-
-In order to work around C's limitations, B<mFmt.c> provides multiple interfaces
-ranging in flexibility and ease-of-use.
-
 
 =head2 Format String Syntax
 
