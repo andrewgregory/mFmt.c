@@ -37,10 +37,10 @@ typedef enum mfmt_token_type_t {
 } mfmt_token_type_t;
 
 typedef enum mfmt_align_t {
-    MFMT_ALIGN_LEFT   = '<',
-    MFMT_ALIGN_RIGHT  = '>',
-    MFMT_ALIGN_CENTER = '^',
-    MFMT_ALIGN_SIGN   = '=',
+    MFMT_ALIGN_LEFT     = '<',
+    MFMT_ALIGN_RIGHT    = '>',
+    MFMT_ALIGN_CENTER   = '^',
+    MFMT_ALIGN_INTERNAL = '=',
 } mfmt_align_t;
 
 typedef enum mfmt_sign_t {

@@ -58,6 +58,12 @@ Python's internal padding alignment.
  |      :=+05 |      +0042 |      +0042 |  <invalid> |*
  +------------+------------+------------+------------+
 
+=head2 Precision
+
+Rust allows specifying precision as C<N$> or C<*> to take the precision from
+one of the formatting arguments.  mFmt.c currently only supports explicit
+precision counts.
+
 =head1 SEE ALSO
 
 https://doc.rust-lang.org/std/fmt/

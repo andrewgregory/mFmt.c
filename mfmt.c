@@ -26,6 +26,7 @@
 #define MFMT_C
 
 #include <errno.h>
+#include <langinfo.h>
 #include <limits.h>
 #include <string.h>
 #include <stdlib.h>
@@ -282,17 +283,22 @@ mfmt_specification_t *mfmt_parse_specification(const char *string) {
 }
 
 ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax) {
-    size_t len, nlen;
     mfmt_sign_t sign = spec->set & MFMT_SPEC_FIELD_SIGN ? spec->sign : MFMT_SIGN_NEGATIVE;
+    size_t width = spec->set & MFMT_SPEC_FIELD_WIDTH ? spec->width : 0;
     mfmt_align_t align
-        = spec->set & MFMT_SPEC_FIELD_ZERO && spec->zero ? MFMT_ALIGN_SIGN
+        = spec->set & MFMT_SPEC_FIELD_ZERO && spec->zero ? MFMT_ALIGN_INTERNAL
         : spec->set & MFMT_SPEC_FIELD_ALIGN              ? spec->align
         :                                                  MFMT_ALIGN_RIGHT;
     char fill
-        = spec->set & MFMT_SPEC_FIELD_ZERO ? '0'
-        : spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill
-        :                                    ' ';
-    size_t width = spec->set & MFMT_SPEC_FIELD_WIDTH ? spec->width : 0;
+        = spec->set & MFMT_SPEC_FIELD_ZERO && spec->zero ? '0'
+        : spec->set & MFMT_SPEC_FIELD_FILL               ? spec->fill
+        :                                                  ' ';
+    char *grouping
+        = !(spec->set & MFMT_SPEC_FIELD_GROUPING) ? ""
+        : spec->grouping == '_'                   ? "_"
+        :                                           ",";
+
+    size_t len, nlen;
     int base = 10;
     int lower = 1;
     char *lchars = "0123456789abcdef";
@@ -303,9 +309,12 @@ ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax
         char t = spec->type[0] != '\0' && spec->type[1] == '\0' ? spec->type[0] : '\0';
         switch(spec->type[0]) {
             case 'b': base = 2; break;
+            case 'd': base = 10; break;
+            case 'n': grouping = nl_langinfo(THOUSEP); break; /* TODO: thread unsafe */
+            case 'o': base = 8; break;
             case 'X': chars = uchars; /* fall-through */
             case 'x': base = 16; break;
-            case 'o': base = 8; break;
+            case 'c': /* TODO? */
             default: errno = EINVAL; return -1;
         }
     }
@@ -314,26 +323,22 @@ ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax
     nlen = 1;
     for(intmax_t i = imax / base; i; i /= base) { nlen++; }
     len = nlen;
-    if(sign != MFMT_SIGN_NEGATIVE) { len++; }
+    if(sign != MFMT_SIGN_NEGATIVE || imax < 0) { len++; }
 
-    if(spec->width > len
-            && (align == MFMT_ALIGN_RIGHT || align == MFMT_ALIGN_CENTER)) {
-        size_t count = spec->width - len;
+    if(width > len && (align == MFMT_ALIGN_RIGHT || align == MFMT_ALIGN_CENTER)) {
+        size_t count = width - len;
         if(align == MFMT_ALIGN_CENTER) { count = count / 2; }
-        while(count--) {
-            if(fputc(fill, f) == EOF) { return -1; }
-        }
+        while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
     }
 
     char buf[nlen], *c = buf + nlen;
-    if(sign == MFMT_SIGN_POSITIVE) { fputc('+', f); }
-    else if(sign == MFMT_SIGN_SPACE) { fputc(' ', f); }
+    if(imax < 0)                        { fputc('-', f); }
+    else if(sign == MFMT_SIGN_POSITIVE) { fputc('+', f); }
+    else if(sign == MFMT_SIGN_SPACE)    { fputc(' ', f); }
     
-    if(spec->width > len && align == MFMT_ALIGN_SIGN) {
-        size_t count = spec->width - len;
-        while(count--) {
-            if(fputc(fill, f) == EOF) { return -1; }
-        }
+    if(width > len && align == MFMT_ALIGN_INTERNAL) {
+        size_t count = width - len;
+        while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
     }
 
     for(intmax_t i = imax; i; i /= base) { *--c = chars[i % base]; }
@@ -341,13 +346,10 @@ ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax
     size_t bytes = fwrite(buf, 1, nlen, f);
     if(bytes != nlen) { return -1; }
 
-    if(spec->width > len
-            && (align == MFMT_ALIGN_LEFT || align == MFMT_ALIGN_CENTER)) {
+    if(width > len && (align == MFMT_ALIGN_LEFT || align == MFMT_ALIGN_CENTER)) {
         size_t count = width - len;
         if(align == MFMT_ALIGN_CENTER) { count = width - count / 2; }
-        while(count--) {
-            if(fputc(fill, f) == EOF) { return -1; }
-        }
+        while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
     }
 
     return bytes;
@@ -357,29 +359,21 @@ ssize_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *strin
     size_t len = strlen(string);
     size_t wlen = spec->set & MFMT_SPEC_FIELD_PRECISION && spec->precision < len ? spec->precision : len;
 
-    if(spec->width > wlen
-            && (spec->align == MFMT_ALIGN_RIGHT
-                || spec->align == MFMT_ALIGN_CENTER)) {
+    if(spec->width > wlen && (spec->align == MFMT_ALIGN_RIGHT || spec->align == MFMT_ALIGN_CENTER)) {
         char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill : ' ';
         size_t count = spec->width - wlen;
         if(spec->align == MFMT_ALIGN_CENTER) { count = count / 2; }
-        while(count--) {
-            if(fputc(fill, f) == EOF) { return -1; }
-        }
+        while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
     }
 
     size_t bytes = fwrite(string, 1, wlen, f);
     if(bytes != wlen) { return -1; }
 
-    if(spec->width > wlen
-            && (spec->align == MFMT_ALIGN_LEFT
-                || spec->align == MFMT_ALIGN_CENTER)) {
+    if(spec->width > wlen && (spec->align == MFMT_ALIGN_LEFT || spec->align == MFMT_ALIGN_CENTER)) {
         char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill : ' ';
         size_t count = spec->width - wlen;
         if(spec->align == MFMT_ALIGN_CENTER) { count = spec->width - count / 2; }
-        while(count--) {
-            if(fputc(fill, f) == EOF) { return -1; }
-        }
+        while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
     }
 
     return spec->width > wlen ? spec->width : bytes;
