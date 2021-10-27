@@ -285,13 +285,14 @@ ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax
     size_t len, nlen;
     mfmt_sign_t sign = spec->set & MFMT_SPEC_FIELD_SIGN ? spec->sign : MFMT_SIGN_NEGATIVE;
     mfmt_align_t align
-        = spec->set & MFMT_SPEC_FIELD_ALIGN              ? spec->align
-        : spec->set & MFMT_SPEC_FIELD_ZERO && spec->zero ? MFMT_ALIGN_SIGN
+        = spec->set & MFMT_SPEC_FIELD_ZERO && spec->zero ? MFMT_ALIGN_SIGN
+        : spec->set & MFMT_SPEC_FIELD_ALIGN              ? spec->align
         :                                                  MFMT_ALIGN_RIGHT;
+    char fill
+        = spec->set & MFMT_SPEC_FIELD_ZERO ? '0'
+        : spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill
+        :                                    ' ';
     size_t width = spec->set & MFMT_SPEC_FIELD_WIDTH ? spec->width : 0;
-    char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill
-              : spec->set & MFMT_SPEC_FIELD_ZERO ? '0'
-              :                                    ' ';
     int base = 10;
     int lower = 1;
     char *lchars = "0123456789abcdef";

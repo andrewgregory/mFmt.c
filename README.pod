@@ -33,21 +33,40 @@ type            = [a-zA-Z]
 
 =head1 COMPATIBILITY
 
-=head2 Padding
+=head2 Fill/Align/0
 
-Python and Rust handle padding for numbers differently.  Python allows
-greater control over where padding is placed, treating C<< < >> and C<< > >>
-differently and adding an additional alignment C<=>.
+Python and Rust handle padding for numbers differently.  Python provides an
+additional alignment modifier to place the fill character between the sign and
+number and treats C<0> as a default fill/alignment that can be overridden.
+Rust treats C<0> as overriding an explicit fill/alignment and always attaches
+0-padding to the number.  mFmt.c follows Rust's interpretation of 0, but adds
+Python's internal padding alignment.
 
-Python
-
-    >>> "{:=+5}".format(42)  ->  '+  42'
-    >>> "{:+5}".format(42)   ->  '  +42'
-    >>> "{:+05}".format(42)  ->  '+0042'
-    >>> "{:<+05}".format(42) ->  '+4200'
-    >>> "{:>+05}".format(42) ->  '00+42'
-
-Rust
+ +------------+------------+------------+------------+
+ |   Format   |   mFmt.c   |   Python   |    Rust    |
+ +------------+------------+------------+------------+
+ |       :+05 |      +0042 |      +0042 |      +0042 |
+ +------------+------------+------------+------------+
+ |      :_>+5 |      __+42 |      __+42 |      __+42 |
+ +------------+------------+------------+------------+
+ |      :0>+5 |      00+42 |      00+42 |      00+42 |
+ +------------+------------+------------+------------+
+ |      :_<+5 |      +42__ |      +42__ |      +42__ |
+ +------------+------------+------------+------------+
+ |     :_>+05 |      +0042 |      __+42 |      +0042 |*
+ +------------+------------+------------+------------+
+ |     :_<+05 |      +0042 |      +42__ |      +0042 |*
+ +------------+------------+------------+------------+
+ |      :<+05 |      +0042 |      +4200 |      +0042 |*
+ +------------+------------+------------+------------+
+ |      :>+05 |      +0042 |      00+42 |      +0042 |*
+ +------------+------------+------------+------------+
+ |       :=+5 |      +  42 |      +  42 |  <invalid> |*
+ +------------+------------+------------+------------+
+ |      :_=+5 |      +__42 |      +__42 |  <invalid> |*
+ +------------+------------+------------+------------+
+ |      :=+05 |      +0042 |      +0042 |  <invalid> |*
+ +------------+------------+------------+------------+
 
 =head1 SEE ALSO
 

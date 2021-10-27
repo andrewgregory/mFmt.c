@@ -8,6 +8,12 @@
 
 #include "../mfmt.c"
 
+#define TAP   1
+#define TABLE 2
+#define DIFF  3
+
+int output = TAP;
+
 char *cmdout(const char *cmd) {
     char *output = NULL;
     size_t olen = 0;
@@ -111,17 +117,27 @@ char *mfmt(const char *format, intmax_t i) {
 }
 
 void compare(const char *format, intmax_t i) {
-    puts("-----------------------");
 
     char *rout = rustfmt(format, i);
     char *pout = pythonfmt(format, i);
     char *mout = mfmt(format, i);
 
-    if((!rout != !pout) || (rout && pout && strcmp(rout, pout) != 0)) { fputs("\033[31m", stdout); }
-    printf("rust: format!(\"{%s}\", %zd) -> '%s'\n", format, i, rout ? rout : "<invalid>");
-    printf("python: \"{%s}\".format(%zd) -> '%s'\n", format, i, pout ? pout : "<invalid>");
-    printf("mfmt: mfmt(\"{%s}\", %zd)    -> '%s'\n", format, i, mout ? mout : "<invalid>");
-    fputs("\033[0m", stdout);
+    int rdiff = !mout != !rout || (mout && strcmp(mout, rout) != 0);
+    int pdiff = !mout != !pout || (mout && strcmp(mout, pout) != 0);
+
+    /* printf("mfmt: mfmt(\"{%s}\", %zd)    -> '%s'\n", format, i, mout ? mout : "<invalid>"); */
+    /* printf("\033[%dm", !mout != !rout || (mout && strcmp(mout, rout) != 0) ? 31 : 0); */
+    /* printf("rust: format!(\"{%s}\", %zd) -> '%s'\n", format, i, rout ? rout : "<invalid>"); */
+    /* printf("\033[%dm", !mout != !pout || (mout && strcmp(mout, pout) != 0) ? 31 : 0); */
+    /* printf("python: \"{%s}\".format(%zd) -> '%s'\n", format, i, pout ? pout : "<invalid>"); */
+    /* fputs("\033[0m", stdout); */
+
+    printf("+------------+------------+------------+------------+\n");
+    printf("| %10s | %10s | %10s | %10s |%s\n", format,
+            mout ? mout : "<invalid>",
+            pout ? pout : "<invalid>",
+            rout ? rout : "<invalid>",
+            rdiff || pdiff ? "*" : "");
 
     free(rout);
     free(pout);
@@ -129,9 +145,11 @@ void compare(const char *format, intmax_t i) {
 }
 
 int main(void) {
-    compare(":+5", 42);
+    printf("+------------+------------+------------+------------+\n");
+    printf("|   Format   |   mFmt.c   |   Python   |    Rust    |\n");
     compare(":+05", 42);
     compare(":_>+5", 42);
+    compare(":0>+5", 42);
     compare(":_<+5", 42);
     compare(":_>+05", 42);
     compare(":_<+05", 42);
@@ -140,5 +158,6 @@ int main(void) {
     compare(":=+5", 42);
     compare(":_=+5", 42);
     compare(":=+05", 42);
+    printf("+------------+------------+------------+------------+\n");
     return 0;
 }
