@@ -26,8 +26,10 @@
 #define MFMT_C
 
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "mfmt.h"
 
@@ -221,11 +223,11 @@ mfmt_specification_t *mfmt_parse_specification(const char *string) {
 
     if(!spec) { return NULL; }
 
-    if(c[0] != '\0' && (c[1] == '<' || c[1] == '^' || c[1] == '>')) {
+    if(c[0] != '\0' && (c[1] == '<' || c[1] == '^' || c[1] == '>' || c[1] == '=')) {
         spec->set |= MFMT_SPEC_FIELD_FILL | MFMT_SPEC_FIELD_ALIGN;
         spec->fill = *(c++);
         spec->align = *(c++);
-    } else if(*c == '<' || *c == '^' || *c == '>') {
+    } else if(*c == '<' || *c == '^' || *c == '>' || *c == '=') {
         spec->set |= MFMT_SPEC_FIELD_ALIGN;
         spec->align = *(c++);
     }
@@ -277,6 +279,109 @@ mfmt_specification_t *mfmt_parse_specification(const char *string) {
     }
 
     return spec;
+}
+
+ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax) {
+    size_t len, nlen;
+    mfmt_sign_t sign = spec->set & MFMT_SPEC_FIELD_SIGN ? spec->sign : MFMT_SIGN_NEGATIVE;
+    mfmt_align_t align
+        = spec->set & MFMT_SPEC_FIELD_ALIGN              ? spec->align
+        : spec->set & MFMT_SPEC_FIELD_ZERO && spec->zero ? MFMT_ALIGN_SIGN
+        :                                                  MFMT_ALIGN_RIGHT;
+    size_t width = spec->set & MFMT_SPEC_FIELD_WIDTH ? spec->width : 0;
+    char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill
+              : spec->set & MFMT_SPEC_FIELD_ZERO ? '0'
+              :                                    ' ';
+    int base = 10;
+    int lower = 1;
+    char *lchars = "0123456789abcdef";
+    char *uchars = "0123456789ABCDEF";
+    char *chars = lchars;
+
+    if(spec->set & MFMT_SPEC_FIELD_TYPE) {
+        char t = spec->type[0] != '\0' && spec->type[1] == '\0' ? spec->type[0] : '\0';
+        switch(spec->type[0]) {
+            case 'b': base = 2; break;
+            case 'X': chars = uchars; /* fall-through */
+            case 'x': base = 16; break;
+            case 'o': base = 8; break;
+            default: errno = EINVAL; return -1;
+        }
+    }
+
+    /* count characters */
+    nlen = 1;
+    for(intmax_t i = imax / base; i; i /= base) { nlen++; }
+    len = nlen;
+    if(sign != MFMT_SIGN_NEGATIVE) { len++; }
+
+    if(spec->width > len
+            && (align == MFMT_ALIGN_RIGHT || align == MFMT_ALIGN_CENTER)) {
+        size_t count = spec->width - len;
+        if(align == MFMT_ALIGN_CENTER) { count = count / 2; }
+        while(count--) {
+            if(fputc(fill, f) == EOF) { return -1; }
+        }
+    }
+
+    char buf[nlen], *c = buf + nlen;
+    if(sign == MFMT_SIGN_POSITIVE) { fputc('+', f); }
+    else if(sign == MFMT_SIGN_SPACE) { fputc(' ', f); }
+    
+    if(spec->width > len && align == MFMT_ALIGN_SIGN) {
+        size_t count = spec->width - len;
+        while(count--) {
+            if(fputc(fill, f) == EOF) { return -1; }
+        }
+    }
+
+    for(intmax_t i = imax; i; i /= base) { *--c = chars[i % base]; }
+
+    size_t bytes = fwrite(buf, 1, nlen, f);
+    if(bytes != nlen) { return -1; }
+
+    if(spec->width > len
+            && (align == MFMT_ALIGN_LEFT || align == MFMT_ALIGN_CENTER)) {
+        size_t count = width - len;
+        if(align == MFMT_ALIGN_CENTER) { count = width - count / 2; }
+        while(count--) {
+            if(fputc(fill, f) == EOF) { return -1; }
+        }
+    }
+
+    return bytes;
+}
+
+ssize_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string) {
+    size_t len = strlen(string);
+    size_t wlen = spec->set & MFMT_SPEC_FIELD_PRECISION && spec->precision < len ? spec->precision : len;
+
+    if(spec->width > wlen
+            && (spec->align == MFMT_ALIGN_RIGHT
+                || spec->align == MFMT_ALIGN_CENTER)) {
+        char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill : ' ';
+        size_t count = spec->width - wlen;
+        if(spec->align == MFMT_ALIGN_CENTER) { count = count / 2; }
+        while(count--) {
+            if(fputc(fill, f) == EOF) { return -1; }
+        }
+    }
+
+    size_t bytes = fwrite(string, 1, wlen, f);
+    if(bytes != wlen) { return -1; }
+
+    if(spec->width > wlen
+            && (spec->align == MFMT_ALIGN_LEFT
+                || spec->align == MFMT_ALIGN_CENTER)) {
+        char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill : ' ';
+        size_t count = spec->width - wlen;
+        if(spec->align == MFMT_ALIGN_CENTER) { count = spec->width - count / 2; }
+        while(count--) {
+            if(fputc(fill, f) == EOF) { return -1; }
+        }
+    }
+
+    return spec->width > wlen ? spec->width : bytes;
 }
 
 #endif /* MFMT_C */

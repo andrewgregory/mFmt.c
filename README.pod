@@ -31,6 +31,24 @@ type            = [a-zA-Z]
 
 "{depends[{name:15} | {version:10} | {desc:50}\n]}"
 
+=head1 COMPATIBILITY
+
+=head2 Padding
+
+Python and Rust handle padding for numbers differently.  Python allows
+greater control over where padding is placed, treating C<< < >> and C<< > >>
+differently and adding an additional alignment C<=>.
+
+Python
+
+    >>> "{:=+5}".format(42)  ->  '+  42'
+    >>> "{:+5}".format(42)   ->  '  +42'
+    >>> "{:+05}".format(42)  ->  '+0042'
+    >>> "{:<+05}".format(42) ->  '+4200'
+    >>> "{:>+05}".format(42) ->  '00+42'
+
+Rust
+
 =head1 SEE ALSO
 
 https://doc.rust-lang.org/std/fmt/

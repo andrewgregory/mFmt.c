@@ -40,6 +40,7 @@ typedef enum mfmt_align_t {
     MFMT_ALIGN_LEFT   = '<',
     MFMT_ALIGN_RIGHT  = '>',
     MFMT_ALIGN_CENTER = '^',
+    MFMT_ALIGN_SIGN   = '=',
 } mfmt_align_t;
 
 typedef enum mfmt_sign_t {
@@ -90,6 +91,6 @@ typedef struct mfmt_t {
     mfmt_token_t *tokens;
 } mfmt_t;
 
-size_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string);
+ssize_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string);
 
 #endif /* MFMT_H */
