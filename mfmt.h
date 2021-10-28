@@ -109,23 +109,23 @@ typedef struct mfmt_val_t {
 } mfmt_val_t;
 
 /* inline literal */
-ssize_t mfmt_fprint(FILE *f, const char *format, ...);
-ssize_t mfmt_fprint(FILE *f, const char *format, va_list ap);
-ssize_t mfmt_fprint(FILE *f, const char *format, mfmt_val_t[]);
+/* ssize_t mfmt_fprint(FILE *f, const char *format, ...); */
+/* ssize_t mfmt_fprint(FILE *f, const char *format, va_list ap); */
+/* ssize_t mfmt_fprint(FILE *f, const char *format, mfmt_val_t[]); */
 
 /* compiled template */
 mfmt_t *mfmt_compile(const char *tmpl);
-ssize_t mfmt_render(FILE *f, mfmt_t *mfmt, ...);
-ssize_t mfmt_render(FILE *f, mfmt_t *mfmt, va_list ap);
-ssize_t mfmt_render(FILE *f, mfmt_t *mfmt, mfmt_val_t[]);
 void mfmt_free(mfmt_t *mfmt);
+/* ssize_t mfmt_render(FILE *f, mfmt_t *mfmt, ...); */
+/* ssize_t mfmt_render(FILE *f, mfmt_t *mfmt, va_list ap); */
+/* ssize_t mfmt_render(FILE *f, mfmt_t *mfmt, mfmt_val_t[]); */
 
 /* value printing */
-ssize_t mfmt_print_char(FILE *f, mfmt_specification_t *spec, const char c);
-ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax);
-ssize_t mfmt_print_umax(FILE *f, mfmt_specification_t *spec, const uintmax_t umax);
-ssize_t mfmt_print_ldbl(FILE *f, mfmt_specification_t *spec, const long double ldbl);
-ssize_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string);
+ssize_t mfmt_print_char(FILE *f, const mfmt_specification_t *spec, const char c);
+ssize_t mfmt_print_imax(FILE *f, const mfmt_specification_t *spec, const intmax_t imax);
+ssize_t mfmt_print_umax(FILE *f, const mfmt_specification_t *spec, const uintmax_t umax);
+ssize_t mfmt_print_ldbl(FILE *f, const mfmt_specification_t *spec, const long double ldbl);
+ssize_t mfmt_print_string(FILE *f, const mfmt_specification_t *spec, const char *string);
 
 /* manual processing */
 mfmt_t *mfmt_parse_tokens(const char *tmpl);
@@ -134,9 +134,9 @@ void mfmt_specification_free(mfmt_specification_t *spec);
 
 
 /* utilities */
-char *mfmt_find_delim_nul(const char *haystack, int needle) {
-char *mfmt_find_token_open(const char *haystack, int topen) {
-char *mfmt_find_token_close(const char *haystack, int topen, int tclose) {
-void mfmt_unescape_delim(char *string, int delim) {
+char *mfmt_find_delim_nul(const char *haystack, int needle);
+char *mfmt_find_token_open(const char *haystack, int topen);
+char *mfmt_find_token_close(const char *haystack, int topen, int tclose);
+void mfmt_unescape_delim(char *string, int delim);
 
 #endif /* MFMT_H */

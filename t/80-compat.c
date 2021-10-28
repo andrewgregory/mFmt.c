@@ -6,11 +6,13 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "../ext/tap.c/tap.c"
 #include "../mfmt.c"
+
+/* Run with --table to generate a comparison table */
 
 #define TAP   1
 #define TABLE 2
-#define DIFF  3
 
 int output = TAP;
 
@@ -103,9 +105,9 @@ char *mfmt(const char *format, intmax_t i) {
     char *buf = NULL;
     size_t buflen = 0;
     FILE *f = open_memstream(&buf, &buflen);
+    mfmt_val_t val = { .name = NULL, .type = MFMT_VAL_TYPE_INTMAX, .value = i };
 
-    mfmt_print(f, format, MFMT_NVAL(NULL, i));
-    mfmt_print(f, "{:5}", MFMT_NVAL(NULL, "foo"));
+    mfmt_print(f, format, val);
 
     /* mfmt_specification_t *spec = mfmt_parse_specification(format + 1); */
 
@@ -148,20 +150,75 @@ void compare(const char *format, intmax_t i) {
     free(mout);
 }
 
-int main(void) {
-    printf("+------------+------------+------------+------------+\n");
-    printf("|   Format   |   mFmt.c   |   Python   |    Rust    |\n");
-    compare("{:+05}", 42);
-    compare("{:_>+5}", 42);
-    compare("{:0>+5}", 42);
-    compare("{:_<+5}", 42);
-    compare("{:_>+05}", 42);
-    compare("{:_<+05}", 42);
-    compare("{:<+05}", 42);
-    compare("{:>+05}", 42);
-    compare("{:=+5}", 42);
-    compare("{:_=+5}", 42);
-    compare("{:=+05}", 42);
-    printf("+------------+------------+------------+------------+\n");
-    return 0;
+void _match(const char *format, intmax_t i, int matchr, int matchp) {
+    char *rout = rustfmt(format, i);
+    char *pout = pythonfmt(format, i);
+    char *mout = mfmt(format, i);
+
+    int rdiff = !mout != !rout || (mout && strcmp(mout, rout) != 0);
+    int pdiff = !mout != !pout || (mout && strcmp(mout, pout) != 0);
+
+    if(output == TAP) {
+        rdiff = matchr && rdiff;
+        pdiff = matchp && pdiff;
+        if(!tap_ok(!rdiff && !pdiff, "%s", format)) {
+            tap_diag("mfmt.c: '%s'", mout ? mout : "<invalid>");
+            tap_diag("python: '%s'", pout ? pout : "<invalid>");
+            tap_diag("rust: '%s'", rout ? rout : "<invalid>");
+        }
+    } else {
+        printf("| %10s | %10s | %10s | %10s |%s\n", format,
+                mout ? mout : "<invalid>",
+                pout ? pout : "<invalid>",
+                rout ? rout : "<invalid>",
+                rdiff || pdiff ? "*" : "");
+        printf("+------------+------------+------------+------------+\n");
+    }
+
+    free(rout);
+    free(pout);
+    free(mout);
+}
+
+void match(const char *format, intmax_t i) { return _match(format, i, 1, 1); }
+void matchr(const char *format, intmax_t i) { return _match(format, i, 1, 0); }
+void matchp(const char *format, intmax_t i) { return _match(format, i, 0, 1); }
+
+int main(int argc, char *argv[]) {
+    if(argc == 2 && strcmp(argv[1], "--table") == 0) {
+        output = TABLE;
+    }
+
+    char *pversion = cmdout("python3 --version");
+    char *rversion = cmdout("rustc --version");
+    pversion[strlen(pversion) - 1] = '\0';
+    rversion[strlen(rversion) - 1] = '\0';
+    if(output == TAP) {
+        tap_plan(12);
+        tap_diag("%s", pversion);
+        tap_diag("%s", rversion);
+    } else {
+        printf("%s\n", pversion);
+        printf("%s\n", rversion);
+        printf("+------------+------------+------------+------------+\n");
+        printf("|   Format   |   mFmt.c   |   Python   |    Rust    |\n");
+        printf("+------------+------------+------------+------------+\n");
+    }
+    free(pversion);
+    free(rversion);
+
+    match("{}", 42);
+    match("{:+05}", 42);
+    match("{:_>+5}", 42);
+    match("{:0>+5}", 42);
+    match("{:_<+5}", 42);
+    matchr("{:_>+05}", 42);
+    matchr("{:_<+05}", 42);
+    matchr("{:<+05}", 42);
+    matchr("{:>+05}", 42);
+    matchp("{:=+5}", 42);
+    matchp("{:_=+5}", 42);
+    matchp("{:=+05}", 42);
+
+    return output == TAP ? tap_finish() : 0;
 }

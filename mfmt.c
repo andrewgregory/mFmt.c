@@ -334,7 +334,7 @@ ssize_t mfmt_print_imax(FILE *f, const mfmt_specification_t *spec, const intmax_
     if(imax < 0)                        { fputc('-', f); }
     else if(sign == MFMT_SIGN_POSITIVE) { fputc('+', f); }
     else if(sign == MFMT_SIGN_SPACE)    { fputc(' ', f); }
-    
+
     if(width > len && align == MFMT_ALIGN_INTERNAL) {
         size_t count = width - len;
         while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
@@ -354,7 +354,7 @@ ssize_t mfmt_print_imax(FILE *f, const mfmt_specification_t *spec, const intmax_
     return bytes;
 }
 
-ssize_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string) {
+ssize_t mfmt_print_string(FILE *f, const mfmt_specification_t *spec, const char *string) {
     size_t len = strlen(string);
     size_t wlen = spec->set & MFMT_SPEC_FIELD_PRECISION && spec->precision < len ? spec->precision : len;
     mfmt_align_t align
@@ -379,6 +379,24 @@ ssize_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *strin
     }
 
     return spec->width > wlen ? spec->width : bytes;
+}
+
+mfmt_t *mfmt_compile(const char *format) {
+    mfmt_t *mfmt = mfmt_parse_tokens(format);
+    if(mfmt == NULL) { return NULL; }
+    for(size_t i = 0; i < mfmt->token_count; i++) {
+        mfmt_token_t *t = &mfmt->tokens[i];
+        if(t->type == MFMT_TOKEN_SUBSTITUTION) {
+            char *s = strchr(t->string, ':');
+            if(s) {
+                t->ctx = mfmt_parse_specification(s + 1);
+                s = '\0';
+            } else {
+                t->ctx = calloc(sizeof(mfmt_specification_t), 1);
+            }
+        }
+    }
+    return mfmt;
 }
 
 ssize_t mfmt_print(FILE *f, const char *format, ...) {
