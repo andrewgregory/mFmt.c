@@ -180,19 +180,20 @@ void _match(const char *format, intmax_t i, int matchr, int matchp) {
     free(mout);
 }
 
-void match(const char *format, intmax_t i) { return _match(format, i, 1, 1); }
+void match (const char *format, intmax_t i) { return _match(format, i, 1, 1); }
 void matchr(const char *format, intmax_t i) { return _match(format, i, 1, 0); }
 void matchp(const char *format, intmax_t i) { return _match(format, i, 0, 1); }
 
 int main(int argc, char *argv[]) {
-    if(argc == 2 && strcmp(argv[1], "--table") == 0) {
-        output = TABLE;
-    }
-
     char *pversion = cmdout("python3 --version");
     char *rversion = cmdout("rustc --version");
     pversion[strlen(pversion) - 1] = '\0';
     rversion[strlen(rversion) - 1] = '\0';
+
+    if(argc == 2 && strcmp(argv[1], "--table") == 0) {
+        output = TABLE;
+    }
+
     if(output == TAP) {
         tap_plan(12);
         tap_diag("%s", pversion);
