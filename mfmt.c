@@ -282,7 +282,7 @@ mfmt_specification_t *mfmt_parse_specification(const char *string) {
     return spec;
 }
 
-ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax) {
+ssize_t mfmt_print_imax(FILE *f, const mfmt_specification_t *spec, const intmax_t imax) {
     mfmt_sign_t sign = spec->set & MFMT_SPEC_FIELD_SIGN ? spec->sign : MFMT_SIGN_NEGATIVE;
     size_t width = spec->set & MFMT_SPEC_FIELD_WIDTH ? spec->width : 0;
     mfmt_align_t align
@@ -300,14 +300,13 @@ ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax
 
     size_t len, nlen;
     int base = 10;
-    int lower = 1;
     char *lchars = "0123456789abcdef";
     char *uchars = "0123456789ABCDEF";
     char *chars = lchars;
 
     if(spec->set & MFMT_SPEC_FIELD_TYPE) {
         char t = spec->type[0] != '\0' && spec->type[1] == '\0' ? spec->type[0] : '\0';
-        switch(spec->type[0]) {
+        switch(t) {
             case 'b': base = 2; break;
             case 'd': base = 10; break;
             case 'n': grouping = nl_langinfo(THOUSEP); break; /* TODO: thread unsafe */
@@ -358,25 +357,56 @@ ssize_t mfmt_print_imax(FILE *f, mfmt_specification_t *spec, const intmax_t imax
 ssize_t mfmt_print_string(FILE *f, mfmt_specification_t *spec, const char *string) {
     size_t len = strlen(string);
     size_t wlen = spec->set & MFMT_SPEC_FIELD_PRECISION && spec->precision < len ? spec->precision : len;
+    mfmt_align_t align
+        = spec->set & MFMT_SPEC_FIELD_ALIGN              ? spec->align
+        :                                                  MFMT_ALIGN_LEFT;
 
-    if(spec->width > wlen && (spec->align == MFMT_ALIGN_RIGHT || spec->align == MFMT_ALIGN_CENTER)) {
+    if(spec->width > wlen && (align == MFMT_ALIGN_RIGHT || align == MFMT_ALIGN_CENTER)) {
         char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill : ' ';
         size_t count = spec->width - wlen;
-        if(spec->align == MFMT_ALIGN_CENTER) { count = count / 2; }
+        if(align == MFMT_ALIGN_CENTER) { count = count / 2; }
         while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
     }
 
     size_t bytes = fwrite(string, 1, wlen, f);
     if(bytes != wlen) { return -1; }
 
-    if(spec->width > wlen && (spec->align == MFMT_ALIGN_LEFT || spec->align == MFMT_ALIGN_CENTER)) {
+    if(spec->width > wlen && (align == MFMT_ALIGN_LEFT || align == MFMT_ALIGN_CENTER)) {
         char fill = spec->set & MFMT_SPEC_FIELD_FILL ? spec->fill : ' ';
         size_t count = spec->width - wlen;
-        if(spec->align == MFMT_ALIGN_CENTER) { count = spec->width - count / 2; }
+        if(align == MFMT_ALIGN_CENTER) { count = spec->width - count / 2; }
         while(count--) { if(fputc(fill, f) == EOF) { return -1; } }
     }
 
     return spec->width > wlen ? spec->width : bytes;
+}
+
+ssize_t mfmt_print(FILE *f, const char *format, ...) {
+    mfmt_t *mfmt = mfmt_compile(format);
+    size_t ret = 0;
+
+    va_list ap;
+    va_start(ap, format);
+
+    for(size_t i = 0; i < mfmt->token_count; i++) {
+        mfmt_token_t *t = &mfmt->tokens[i];
+        if(t->type == MFMT_TOKEN_LITERAL) {
+            fputs(t->string, f);
+        } else {
+            mfmt_specification_t *spec = (mfmt_specification_t*)t->ctx;
+            mfmt_val_t val = va_arg(ap, mfmt_val_t);
+
+            switch(val.type) {
+                case MFMT_VAL_TYPE_UINTMAX: return -1;
+                case MFMT_VAL_TYPE_INTMAX: ret += mfmt_print_imax(f, spec, val.value.intmax); break;
+                case MFMT_VAL_TYPE_STRING: ret += mfmt_print_string(f, spec, val.value.string); break;
+            }
+        }
+    }
+
+    mfmt_free(mfmt);
+
+    return ret > SSIZE_MAX ? SSIZE_MAX : (ssize_t)ret;
 }
 
 #endif /* MFMT_C */

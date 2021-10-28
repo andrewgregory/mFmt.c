@@ -37,7 +37,7 @@ char *cmdout(const char *cmd) {
 
 char *pythonfmt(const char *format, intmax_t i) {
     char *pycmd;
-    asprintf(&pycmd, "python -c 'print(\"{%s}\".format(%zd), end=\"\")'", format, i);
+    asprintf(&pycmd, "python -c 'print(\"%s\".format(%zd), end=\"\")'", format, i);
 
     char *output = cmdout(pycmd);
 
@@ -47,7 +47,7 @@ char *pythonfmt(const char *format, intmax_t i) {
 
 char *rustfmt(const char *format, intmax_t i) {
     char tmpdir[] = "mfmt-XXXXXX";
-    char *src = "fn main() { print!(\"{%s}\", %zd); }";
+    char *src = "fn main() { print!(\"%s\", %zd); }";
 
     if(!mkdtemp(tmpdir)) { return NULL; }
 
@@ -103,16 +103,20 @@ char *mfmt(const char *format, intmax_t i) {
     char *buf = NULL;
     size_t buflen = 0;
     FILE *f = open_memstream(&buf, &buflen);
-    mfmt_specification_t *spec = mfmt_parse_specification(format + 1);
 
-    /* dump_spec(format, spec); */
-    if(spec == NULL || mfmt_print_imax(f, spec, i) == -1) {
-        buf = strdup("<invalid>");
-    }
+    mfmt_print(f, format, MFMT_NVAL(NULL, i));
+    mfmt_print(f, "{:5}", MFMT_NVAL(NULL, "foo"));
+
+    /* mfmt_specification_t *spec = mfmt_parse_specification(format + 1); */
+
+    /* /1* dump_spec(format, spec); *1/ */
+    /* if(spec == NULL || mfmt_print_imax(f, spec, i) == -1) { */
+    /*     buf = strdup("<invalid>"); */
+    /* } */
+
+    /* free(spec); */
 
     fclose(f);
-    free(spec);
-
     return buf;
 }
 
@@ -147,17 +151,17 @@ void compare(const char *format, intmax_t i) {
 int main(void) {
     printf("+------------+------------+------------+------------+\n");
     printf("|   Format   |   mFmt.c   |   Python   |    Rust    |\n");
-    compare(":+05", 42);
-    compare(":_>+5", 42);
-    compare(":0>+5", 42);
-    compare(":_<+5", 42);
-    compare(":_>+05", 42);
-    compare(":_<+05", 42);
-    compare(":<+05", 42);
-    compare(":>+05", 42);
-    compare(":=+5", 42);
-    compare(":_=+5", 42);
-    compare(":=+05", 42);
+    compare("{:+05}", 42);
+    compare("{:_>+5}", 42);
+    compare("{:0>+5}", 42);
+    compare("{:_<+5}", 42);
+    compare("{:_>+05}", 42);
+    compare("{:_<+05}", 42);
+    compare("{:<+05}", 42);
+    compare("{:>+05}", 42);
+    compare("{:=+5}", 42);
+    compare("{:_=+5}", 42);
+    compare("{:=+05}", 42);
     printf("+------------+------------+------------+------------+\n");
     return 0;
 }
